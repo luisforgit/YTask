@@ -1,0 +1,542 @@
+import React, { useState, useEffect } from 'react';
+import { auth } from './firebaseConfig.js';
+import {
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+} from 'firebase/auth';
+import { db } from './firebaseConfig.js';
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  deleteDoc,
+  doc,
+  updateDoc,
+  addDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
+import {
+  Box,
+  Button,
+  TextField,
+  Typography,
+  List,
+  ListItem,
+  IconButton,
+  Modal,
+  Chip,
+  CircularProgress,
+  Select,
+  MenuItem,
+  Stack,
+} from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import AddIcon from '@mui/icons-material/Add';
+import './App.css';
+import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs from 'dayjs';
+import ArrowUpward from '@mui/icons-material/ArrowUpward';
+import ArrowDownward from '@mui/icons-material/ArrowDownward';
+
+function App() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const [todos, setTodos] = useState([]);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editTodo, setEditTodo] = useState({
+    id: null,
+    text: '',
+    tagInput: '',
+    priority: '',
+    startDate: '17-07-2025',
+    deadline: '',
+  });
+
+
+  const [orderByField, setOrderByField] = useState('deadline');
+  const [orderDir, setOrderDir] = useState('desc'); // 'desc' | 'asc'
+
+  /*Format Date Helper*/ 
+  const fmt = (iso) => iso ? dayjs(iso).format('DD/MM/YYYY') : '';
+
+  /* NEW-TODO state with native date strings */
+  const [newTodo, setNewTodo] = useState({
+    text: '',
+    tagInput: '',
+    priority: '',
+    startDate: '',          // YYYY-MM-DD or empty
+    deadline: '',           // YYYY-MM-DD or empty
+  });
+
+  /* --- legacy helpers (kept for compatibility) --- */
+  // const formatDate = (dateString) => {
+  //   if (!dateString) return '';
+  //   const date = new Date(dateString);
+  //   const day = String(date.getDate()).padStart(2, '0');
+  //   const month = String(date.getMonth() + 1).padStart(2, '0');
+  //   const year = date.getFullYear();
+  //   return `${day}-${month}-${year}`;
+  // };
+
+  // const parseDate = (dateStr) => {
+  //   if (!dateStr) return '';
+  //   const [day, month, year] = dateStr.split('-');
+  //   if (!day || !month || !year || day.length !== 2 || month.length !== 2 || year.length !== 4) {
+  //     alert('Please use DD-MM-YYYY format (e.g., 17-07-2025)');
+  //     return '';
+  //   }
+  //   const date = new Date(`${year}-${month}-${day}`);
+  //   if (isNaN(date.getTime())) {
+  //     alert('Invalid date. Please use DD-MM-YYYY format (e.g., 17-07-2025)');
+  //     return '';
+  //   }
+  //   return `${year}-${month}-${day}`;
+  // };
+  /* ----------------------------------------------- */
+
+  /* Auth listener */
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return unsubscribe;
+  }, []);
+
+  /* Firestore listener */
+  useEffect(() => {
+    if (!user) {
+      setTodos([]);
+      setLoading(false);
+      return;
+    }
+
+    const q = query(
+      collection(db, `users/${user.uid}/todos`),
+      orderBy(orderByField, orderDir)
+    );
+
+    // const q = query(
+    //   collection(db, `users/${user.uid}/todos`),
+    //   orderBy('timestamp', 'desc')
+    // );
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const todosData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          text: doc.data().todo || '',
+          tags: doc.data().tags || [],
+          priority: doc.data().priority || 0,
+          startDate: doc.data().startDate || '',
+          deadline: doc.data().deadline || '',
+        }));
+        setTodos(todosData);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching todos:', error);
+        alert('Failed to load todos. Please check the console.');
+        setLoading(false);
+      }
+    );
+    return unsubscribe;
+  }, [user, orderByField, orderDir]);
+
+  /* --- Auth handlers --- */
+  const login = async (e) => {
+    e.preventDefault();
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      setEmail('');
+      setPassword('');
+    } catch (error) {
+      console.error('Error logging in:', error);
+      alert(error.message);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Error logging out:', error);
+      alert('Failed to log out. Please try again.');
+    }
+  };
+
+  const register = async (e) => {
+    e.preventDefault();
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      setEmail(''); setPassword('');
+    } catch (err) { alert(err.message); }
+  };
+  
+  const resetPassword = async (e) => {
+    e.preventDefault();
+    console.log('sending reset to:', email);        // <-- add this
+    try {
+      await sendPasswordResetEmail(auth, email);
+      alert('Reset e-mail sent! Check your inbox.');
+      setMode('login');
+    } catch (err) {
+      console.error(err.code, err.message);
+      alert(err.message);
+    }
+  };
+
+  /* --- CRUD handlers --- */
+  const handleDelete = async (id) => {
+    if (user && id) {
+      try {
+        await deleteDoc(doc(db, `users/${user.uid}/todos`, id));
+      } catch (error) {
+        console.error('Error deleting todo:', error);
+        alert('Failed to delete todo. Please try again.');
+      }
+    }
+  };
+
+  const handleEdit = (todo) => {
+    setEditTodo({
+      id: todo.id,
+      text: todo.text,
+      tagInput: todo.tags.join(', '),
+      priority: todo.priority.toString() || '',
+      startDate: fmt(todo.startDate) || '17-07-2025',
+      deadline: fmt(todo.deadline) || '',
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!user || !editTodo.id) return;
+    const priorityValue = Number(editTodo.priority) || 0;
+    const tags = editTodo.tagInput
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const uniqueTags = [...new Set(tags)];
+    // const startDateParsed = parseDate(editTodo.startDate);
+    // if (!startDateParsed) return;
+    // const deadlineParsed = parseDate(editTodo.deadline);
+    // if (editTodo.deadline && new Date(deadlineParsed) < new Date(startDateParsed)) {
+    //   alert('Deadline must be the same or later than the start date.');
+    //   return;
+    // }
+
+    // NEW
+    const startDateParsed = editTodo.startDate
+    ? dayjs(editTodo.startDate, 'DD-MM-YYYY').format('YYYY-MM-DD')
+    : '';
+    const deadlineParsed = editTodo.deadline
+    ? dayjs(editTodo.deadline, 'DD-MM-YYYY').format('YYYY-MM-DD')
+    : '';
+    try {
+      await updateDoc(doc(db, `users/${user.uid}/todos`, editTodo.id), {
+        todo: editTodo.text || '',
+        tags: uniqueTags,
+        priority: priorityValue,
+        startDate: startDateParsed,
+        deadline: deadlineParsed,
+      });
+      setEditModalOpen(false);
+    } catch (error) {
+      console.error('Error updating todo:', error);
+      alert('Failed to update todo. Please try again.');
+    }
+  };
+
+  const handleAddTodo = async (e) => {
+    e.preventDefault();
+    if (!user) return;
+    const priorityValue = Number(newTodo.priority) || 0;
+    //const priorityValue = newTodo.priority === '' ? 0 : parseInt(newTodo.priority, 10) || 0;
+    const tags = newTodo.tagInput
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const uniqueTags = [...new Set(tags)];
+    /* use the raw ISO strings from the date inputs */
+    const { startDate, deadline } = newTodo;
+    if (deadline && deadline < startDate) {
+      alert('Deadline must be the same or later than the start date.');
+      return;
+    }
+    try {
+      await addDoc(collection(db, `users/${user.uid}/todos`), {
+        todo: newTodo.text.trim() || '',
+        tags: uniqueTags,
+        priority: priorityValue,
+        startDate,
+        deadline,
+        timestamp: serverTimestamp(),
+      });
+      setNewTodo({ text: '', tagInput: '', priority: '', startDate: '', deadline: '' });
+    } catch (error) {
+      console.error('Error adding todo:', error);
+      alert('Failed to add todo. Please try again.');
+    }
+  };
+
+  /* ---------- RENDER ---------- */
+/* Mode state must live OUTSIDE early returns */
+const [mode, setMode] = useState('login'); // 'login' | 'register' | 'reset'
+
+if (!user) {
+  return (
+    <div className="App">
+      <Typography variant="h4" gutterBottom>
+        TODO List App
+      </Typography>
+
+      <Box sx={{ mt: 2 }}>
+        {mode === 'login' && (
+          <form onSubmit={login}>
+            <TextField label="Email"    type="email"    value={email} onChange={e => setEmail(e.target.value)} fullWidth required />
+            <TextField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} fullWidth required />
+            <Button type="submit" variant="contained">Login</Button>
+            <Button onClick={() => setMode('register')} sx={{ ml: 1 }}>Register</Button>
+            <Button onClick={() => setMode('reset')}    sx={{ ml: 1 }}>Forgot password?</Button>
+          </form>
+        )}
+
+        {mode === 'register' && (
+          <form onSubmit={register}>
+            <TextField label="Email"    type="email"    value={email} onChange={e => setEmail(e.target.value)} fullWidth required />
+            <TextField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} fullWidth required />
+            <Button type="submit" variant="contained">Create account</Button>
+            <Button onClick={() => setMode('login')} sx={{ ml: 1 }}>Back to login</Button>
+          </form>
+        )}
+
+        {mode === 'reset' && (
+          <form onSubmit={resetPassword}>
+            <TextField label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} fullWidth required />
+            <Button type="submit" variant="contained">Send reset email</Button>
+            <Button onClick={() => setMode('login')} sx={{ ml: 1 }}>Back to login</Button>
+          </form>
+        )}
+      </Box>
+    </div>
+  );
+}
+
+if (loading) {
+  return (
+    <Box className="App" sx={{ textAlign: 'center', mt: 4 }}>
+      <CircularProgress />
+    </Box>
+  );
+}
+
+/* …rest of your logged-in JSX stays unchanged… */
+
+  if (loading) {
+    return (
+      <Box className="App" sx={{ textAlign: 'center', mt: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return (
+    <div className="App">
+      <Typography variant="h4" gutterBottom>
+        TODO List App
+      </Typography>
+      <Typography variant="h6" gutterBottom>
+        Welcome, {user.email}
+      </Typography>
+      <Button variant="contained" color="secondary" onClick={logout} sx={{ mb: 2 }}>
+        Logout
+      </Button>
+
+      {/* ADD NEW TODO */}
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="subtitle1" gutterBottom>
+          Add New Todo
+        </Typography>
+        <form onSubmit={handleAddTodo} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <TextField
+            label="Todo Text"
+            value={newTodo.text}
+            onChange={(e) => setNewTodo({ ...newTodo, text: e.target.value })}
+            fullWidth
+          />
+          <TextField
+            label="Tags (comma-separated)"
+            value={newTodo.tagInput}
+            onChange={(e) => setNewTodo({ ...newTodo, tagInput: e.target.value })}
+            fullWidth
+            placeholder="work, personal, urgent"
+          />
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <DatePicker
+              label="Start Date"
+              value={newTodo.startDate ? dayjs(newTodo.startDate) : null}
+              onChange={(val) =>
+                setNewTodo({ ...newTodo, startDate: val ? val.format('YYYY-MM-DD') : '' })
+              }
+              slotProps={{ textField: { fullWidth: true } }}
+              format="DD/MM/YYYY"
+            />
+            <DatePicker
+              label="Deadline"
+              value={newTodo.deadline ? dayjs(newTodo.deadline) : null}
+              onChange={(val) =>
+                setNewTodo({ ...newTodo, deadline: val ? val.format('YYYY-MM-DD') : '' })
+              }
+              slotProps={{ textField: { fullWidth: true } }}
+              format="DD/MM/YYYY"
+            />
+          </LocalizationProvider>
+          <TextField
+            label="Priority (0 or higher)"
+            type="number"
+            value={newTodo.priority}
+            onChange={(e) => setNewTodo({ ...newTodo, priority: e.target.value })}
+            fullWidth
+            slotProps={{ textField: { fullWidth: true } }}
+          />
+          <Button type="submit" variant="contained" sx={{ alignSelf: 'flex-start' }}>
+            <AddIcon /> Add Todo
+          </Button>
+        </form>
+      </Box>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+  <Select
+    value={orderByField}
+    onChange={(e) => setOrderByField(e.target.value)}
+    size="small"
+  >
+    <MenuItem value="deadline">Deadline</MenuItem>
+    <MenuItem value="priority">Priority</MenuItem>
+    <MenuItem value="created">Created</MenuItem>
+  </Select>
+
+  <IconButton
+    onClick={() => setOrderDir(prev => (prev === 'desc' ? 'asc' : 'desc'))}
+    size="small"
+    sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }} // igual ao contorno do Select
+  >
+    {orderDir === 'desc' ? <ArrowDownward /> : <ArrowUpward />}
+  </IconButton>
+</Stack>
+      {/* LIST */}
+      <List>
+        {todos.map((todo) => (
+          <ListItem
+            key={todo.id}
+            sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography>{todo.text}</Typography>
+              <Box sx={{ mt: 0.5 }}>
+                {todo.tags.map((tag) => (
+                  <Chip key={tag} label={tag} size="small" sx={{ mr: 0.5 }} />
+                ))}
+              </Box>
+              <Typography variant="caption">Priority: {todo.priority}</Typography>
+              {todo.startDate && (
+                <Typography variant="caption">Start: {fmt(todo.startDate)}</Typography>
+              )}
+              {todo.deadline && (
+                <Typography variant="caption">Deadline: {fmt(todo.deadline)}</Typography>
+              )}
+            </Box>
+            <Box>
+              <IconButton onClick={() => handleEdit(todo)}>
+                <EditIcon />
+              </IconButton>
+              <IconButton onClick={() => handleDelete(todo.id)}>
+                <DeleteIcon />
+              </IconButton>
+            </Box>
+          </ListItem>
+        ))}
+      </List>
+
+      {/* EDIT MODAL — unchanged, still uses legacy DD-MM-YYYY helpers */}
+      <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)}>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 400,
+            bgcolor: 'background.paper',
+            boxShadow: 24,
+            p: 4,
+            borderRadius: 2,
+          }}
+        >
+          <form onSubmit={handleSaveEdit}>
+            <TextField
+              label="Edit Todo"
+              value={editTodo.text}
+              onChange={(e) => setEditTodo({ ...editTodo, text: e.target.value })}
+              fullWidth
+              margin="normal"
+            />
+            <TextField
+              label="Tags (comma-separated)"
+              value={editTodo.tagInput}
+              onChange={(e) => setEditTodo({ ...editTodo, tagInput: e.target.value })}
+              fullWidth
+              margin="normal"
+            />
+            {/* inside the <form onSubmit={handleSaveEdit}> */}
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <DatePicker
+                label="Start Date"
+                value={editTodo.startDate ? dayjs(editTodo.startDate, 'DD-MM-YYYY') : null}
+                onChange={(val) =>
+                  setEditTodo({ ...editTodo, startDate: val ? val.format('DD-MM-YYYY') : '' })
+                }
+                slotProps={{ textField: { fullWidth: true, margin: 'normal' } }}
+                format="DD/MM/YYYY"
+              />
+              <DatePicker
+                label="Deadline"
+                value={editTodo.deadline ? dayjs(editTodo.deadline, 'DD-MM-YYYY') : null}
+                onChange={(val) =>
+                  setEditTodo({ ...editTodo, deadline: val ? val.format('DD-MM-YYYY') : '' })
+                }
+                slotProps={{ textField: { fullWidth: true, margin: 'normal' } }}
+                format="DD/MM/YYYY"
+              />
+            </LocalizationProvider>
+            <TextField
+              label="Priority"
+              type="number"
+              value={editTodo.priority}
+              onChange={(e) => setEditTodo({ ...editTodo, priority: e.target.value })}
+              fullWidth
+              margin="normal"
+            />
+            <Button type="submit" variant="contained" sx={{ mt: 2 }}>
+              Save
+            </Button>
+            <Button onClick={() => setEditModalOpen(false)} sx={{ mt: 2, ml: 1 }}>
+              Cancel
+            </Button>
+          </form>
+        </Box>
+      </Modal>
+    </div>
+  );
+}
+
+export default App;
