@@ -1,12 +1,30 @@
 # Ydo - a Todo App
 
-Aplicação simples de gestão de tarefas que inclui as seguintes funcionalidades
--
-Currently, two official plugins are available:
+Aplicação simples de gestão de tarefas criada com node.js, npm (node package manager) e Vite + React, com backend firestore para autenticação e armazenamento. Inclui os seguintes campos para inserção de informação:
+- Descrição em texto multilinha
+- tags
+- prioridade
+- data de início
+- data limite
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Permite a ordenação, crescente ou decrescente, por
 
-## Expanding the ESLint configuration
+- data de criação (campo de preenchimento automático com "timestamp")
+- prioridade
+- data limite
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+As tarefas podem ser filtradas por:
+
+- texto livre, na descrição
+- tags
+- prioridade mínima
+
+
+Para recriar o projeto:
+
+- faça o download do código para a uma pasta de projeto, a criar e com o nome que entender, desde que válido em JavaScript.
+- na raiz do projeto execute no terminal >> npm run dev
+- siga as instruções do vite para aceder à primeira página no browser.
+
+
+A utilização deste código obriga a: informar o criador (luisforgit@mail.com) e mencionar este repositório, como a fonte, no código derivado.
