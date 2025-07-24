@@ -23,7 +23,9 @@ As tarefas podem ser filtradas por:
 Para recriar o projeto:
 
 - faça o download do código para a uma pasta de projeto, a criar e com o nome que entender, desde que válido em JavaScript.
-- na raiz do projeto execute no terminal >> npm run dev
+- na raiz do projeto execute no terminal
+  >> npm install
+  >> npm run dev
 - siga as instruções do vite para aceder à primeira página no browser.
 
 
