@@ -30,4 +30,4 @@ Para recriar o projeto:
 - siga as instruções do vite para aceder à primeira página no browser.
 
 
-A utilização deste código obriga a: informar o criador (luisforgit@mail.com) e mencionar este repositório, como a fonte, no código derivado.
+A utilização deste código obriga a informar o criador (luisforgit@mail.com) e a mencionar este repositório, no código derivado, como a sua fonte.
