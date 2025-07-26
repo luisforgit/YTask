@@ -33,4 +33,4 @@ Para recriar o projeto:
 - siga as instruções do vite para aceder à primeira página no browser.
 
 
-A utilização deste código obriga a informar o criador (luisforgit@mail.com) e a mencionar este repositório, no código derivado, como a sua fonte.
+A utilização deste código para fins privados ou públicos, para utilização comercial ou não, obriga a informar o criador (luisforgit@mail.com) e a mencionar a fonte (https://github.com/luisforgit/YTask), no código derivado.
