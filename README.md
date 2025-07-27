@@ -1,6 +1,6 @@
 # Ydo - a Todo App
 
-Aplicação simples de gestão de tarefas criada com node.js, npm (node package manager) e Vite + React, tendo como backend de autenticaçãao e armaezanamento o Gooble Firestore.
+Aplicação simples de gestão de tarefas criada com node.js, npm (node package manager) e Vite + React, tendo como backend de autenticação e armazenamento Google Firestore.
 
 Inclui os seguintes campos para inserção de informação:
 
